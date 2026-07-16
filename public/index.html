@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>60s API - 每天60秒读懂世界</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; }
+  .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+  .card-hover { transition: all 0.3s ease; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.1); }
+  .tab-active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+  .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton 1.5s infinite; }
+  @keyframes skeleton { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .fade-in { animation: fadeIn 0.4s ease-in-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .hot-rank-1 { color: #ff4757; font-weight: bold; }
+  .hot-rank-2 { color: #ff6348; font-weight: bold; }
+  .hot-rank-3 { color: #ffa502; font-weight: bold; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div class="gradient-bg text-white py-8 px-4">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <h1 class="text-3xl md:text-4xl font-bold flex items-center gap-3">
+          <span>⏰</span> 60s API
+        </h1>
+        <p class="text-white/80 mt-2">每天60秒，读懂世界 · 免费开放API集合</p>
+      </div>
+      <div class="text-right">
+        <div id="currentDate" class="text-xl font-semibold"></div>
+        <div id="currentWeekday" class="text-white/70 text-sm"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-6xl mx-auto px-4 -mt-4">
+  <div class="bg-white rounded-2xl shadow-lg p-2 overflow-x-auto scrollbar-hide">
+    <div class="flex gap-2 min-w-max" id="tabs">
+      <button class="tab-btn tab-active px-4 py-2.5 rounded-xl text-sm font-medium transition-all" data-tab="60s">🌍 每日60秒</button>
+      <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="hot">🔥 热搜榜</button>
+      <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="finance">💰 财经数据</button>
+      <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="weather">🌤️ 天气</button>
+      <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="movie">🎬 影视</button>
+      <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="tools">🛠️ 工具</button>
+      <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="life">🎯 生活娱乐</button>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-6xl mx-auto px-4 py-6">
+  <div id="content"></div>
+</div>
+
+<footer class="text-center text-gray-400 text-sm py-8 px-4">
+  <p>数据来源于公开网络，仅供学习交流使用</p>
+  <p class="mt-1">Powered by 60s API · <a href="https://github.com/islon/comef60s" class="text-purple-500 hover:underline">GitHub</a></p>
+</footer>
+
+<script>
+const API_BASE = 'https://60s.viki.moe';
+
+const tabs = document.querySelectorAll('.tab-btn');
+const content = document.getElementById('content');
+
+function setCurrentDate() {
+  const now = new Date();
+  const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  document.getElementById('currentDate').textContent = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+  document.getElementById('currentWeekday').textContent = days[now.getDay()];
+}
+setCurrentDate();
+
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('tab-active'));
+    tab.classList.add('tab-active');
+    loadTab(tab.dataset.tab);
+  });
+});
+
+async function fetchJSON(url) {
+  const res = await fetch(API_BASE + url);
+  return res.json();
+}
+
+function skeletonCard(count = 5) {
+  return Array(count).fill(0).map(() => `
+    <div class="bg-white rounded-xl p-4 card-hover">
+      <div class="skeleton h-5 w-3/4 rounded mb-3"></div>
+      <div class="skeleton h-4 w-1/2 rounded"></div>
+    </div>
+  `).join('');
+}
+
+function render60s(data) {
+  const d = data.data;
+  return `
+    <div class="fade-in">
+      <div class="bg-white rounded-2xl shadow-sm p-6 mb-4">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">📰</span>
+          <h2 class="text-xl font-bold">每天60秒读懂世界</h2>
+          <span class="ml-auto text-sm text-gray-400">${d.date}</span>
+        </div>
+        <div class="space-y-3">
+          ${d.news.map((item, i) => `
+            <div class="flex gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+              <span class="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 text-white text-xs flex items-center justify-center font-medium">${i + 1}</span>
+              <p class="text-gray-700 leading-relaxed">${item}</p>
+            </div>
+          `).join('')}
+        </div>
+        ${d.tip ? `
+          <div class="mt-5 pt-5 border-t border-gray-100">
+            <div class="flex items-start gap-2">
+              <span class="text-lg">💡</span>
+              <p class="text-gray-600 italic">"${d.tip}"</p>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+const hotSources = [
+  { key: 'weibo', name: '微博热搜', icon: '🔴' },
+  { key: 'zhihu', name: '知乎热搜', icon: '🔵' },
+  { key: 'bili', name: 'B站热门', icon: '🟣' },
+  { key: 'douyin', name: '抖音热点', icon: '⚫' },
+  { key: 'rednote', name: '小红书', icon: '🔴' },
+  { key: 'toutiao', name: '今日头条', icon: '🔴' },
+  { key: 'baidu/hot', name: '百度热搜', icon: '🔴' },
+];
+
+async function renderHot() {
+  let html = '<div class="fade-in grid grid-cols-1 md:grid-cols-2 gap-4">';
+  for (const src of hotSources) {
+    html += `
+      <div class="bg-white rounded-2xl shadow-sm p-5 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-xl">${src.icon}</span>
+          <h3 class="font-bold text-lg">${src.name}</h3>
+        </div>
+        <div id="hot-${src.key.replace('/', '-')}" class="space-y-2">
+          ${skeletonCard(3)}
+        </div>
+      </div>
+    `;
+  }
+  html += '</div>';
+  content.innerHTML = html;
+
+  for (const src of hotSources) {
+    try {
+      const data = await fetchJSON('/v2/' + src.key);
+      const list = data.data?.list || data.data || [];
+      const container = document.getElementById('hot-' + src.key.replace('/', '-'));
+      if (container && Array.isArray(list) && list.length > 0) {
+        container.innerHTML = list.slice(0, 8).map((item, i) => {
+          const title = item.title || item.word || item.name || JSON.stringify(item);
+          const rankClass = i < 3 ? `hot-rank-${i + 1}` : 'text-gray-400';
+          return `
+            <div class="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+              <span class="${rankClass} w-5 text-center text-sm">${i + 1}</span>
+              <span class="text-gray-700 text-sm truncate flex-1">${title}</span>
+              ${item.hot ? `<span class="text-xs text-gray-400 flex-shrink-0">${item.hot}</span>` : ''}
+            </div>
+          `;
+        }).join('');
+      } else if (container) {
+        container.innerHTML = '<p class="text-gray-400 text-sm py-4 text-center">暂无数据</p>';
+      }
+    } catch (e) {
+      const container = document.getElementById('hot-' + src.key.replace('/', '-'));
+      if (container) container.innerHTML = '<p class="text-gray-400 text-sm py-4 text-center">加载失败</p>';
+    }
+  }
+}
+
+async function renderFinance() {
+  content.innerHTML = `
+    <div class="fade-in grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-2xl shadow-sm p-5 card-hover md:col-span-3">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🪙</span>
+          <h3 class="font-bold text-lg">今日油价</h3>
+        </div>
+        <div id="fuel-price">${skeletonCard(2)}</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm p-5 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🥇</span>
+          <h3 class="font-bold text-lg">金价</h3>
+        </div>
+        <div id="gold-price">${skeletonCard(3)}</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm p-5 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">💱</span>
+          <h3 class="font-bold text-lg">汇率</h3>
+        </div>
+        <div id="exchange-rate">${skeletonCard(3)}</div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const fuel = await fetchJSON('/v2/fuel-price');
+    const d = fuel.data;
+    document.getElementById('fuel-price').innerHTML = `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        ${d.items?.map(item => `
+          <div class="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-xl p-4 text-center">
+            <div class="text-sm text-gray-500 mb-1">${item.name}</div>
+            <div class="text-2xl font-bold text-orange-600">${item.price}</div>
+            <div class="text-xs text-gray-400 mt-1">元/升</div>
+          </div>
+        `).join('') || ''}
+      </div>
+      ${d.trend ? `
+        <div class="mt-4 p-3 bg-gray-50 rounded-xl text-sm">
+          <span class="text-gray-600">下次调价：</span>
+          <span class="font-medium">${d.trend.next_adjustment_date || '未知'}</span>
+          <span class="ml-2 ${d.trend.direction === '上调' ? 'text-red-500' : 'text-green-500'}">
+            ${d.trend.direction || ''} ${d.trend.change_liter_desc || ''}
+          </span>
+        </div>
+      ` : ''}
+    `;
+  } catch (e) {
+    document.getElementById('fuel-price').innerHTML = '<p class="text-gray-400 text-sm">加载失败</p>';
+  }
+
+  try {
+    const gold = await fetchJSON('/v2/gold-price');
+    const d = gold.data;
+    const items = Array.isArray(d) ? d : (d?.list || d?.prices || []);
+    document.getElementById('gold-price').innerHTML = Array.isArray(items) && items.length > 0 ? items.slice(0, 5).map(item => `
+      <div class="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+        <span class="text-gray-600 text-sm">${item.name || item.type || item.variety || '黄金'}</span>
+        <span class="font-semibold text-yellow-600">${item.price || item.value || '-'}</span>
+      </div>
+    `).join('') : '<p class="text-gray-400 text-sm py-4 text-center">暂无数据</p>';
+  } catch (e) {
+    document.getElementById('gold-price').innerHTML = '<p class="text-gray-400 text-sm">加载失败</p>';
+  }
+
+  try {
+    const ex = await fetchJSON('/v2/exchange-rate');
+    const d = ex.data;
+    const items = Array.isArray(d) ? d : (d?.list || d?.rates || []);
+    document.getElementById('exchange-rate').innerHTML = Array.isArray(items) && items.length > 0 ? items.slice(0, 5).map(item => `
+      <div class="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+        <span class="text-gray-600 text-sm">${item.name || item.currency || ''}</span>
+        <span class="font-semibold text-blue-600">${item.rate || item.value || item.price || '-'}</span>
+      </div>
+    `).join('') : '<p class="text-gray-400 text-sm py-4 text-center">暂无数据</p>';
+  } catch (e) {
+    document.getElementById('exchange-rate').innerHTML = '<p class="text-gray-400 text-sm">加载失败</p>';
+  }
+}
+
+async function renderWeather() {
+  content.innerHTML = `
+    <div class="fade-in">
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <div class="flex items-center gap-2 mb-6">
+          <span class="text-2xl">🌤️</span>
+          <h3 class="font-bold text-lg">实时天气</h3>
+          <div class="ml-auto flex gap-2">
+            <input id="cityInput" type="text" placeholder="输入城市名" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" value="北京">
+            <button id="cityBtn" class="px-4 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg text-sm hover:opacity-90 transition">查询</button>
+          </div>
+        </div>
+        <div id="weather-data" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          ${skeletonCard(4)}
+        </div>
+      </div>
+    </div>
+  `;
+
+  async function loadWeather(city) {
+    document.getElementById('weather-data').innerHTML = skeletonCard(4);
+    try {
+      const data = await fetchJSON('/v2/weather/realtime?city=' + encodeURIComponent(city));
+      const d = data.data;
+      document.getElementById('weather-data').innerHTML = `
+        <div class="bg-gradient-to-br from-blue-400 to-purple-500 text-white rounded-2xl p-6">
+          <div class="text-sm opacity-80">${d.city || city}</div>
+          <div class="text-5xl font-bold my-2">${d.temperature || d.temp || '-'}°</div>
+          <div class="text-lg">${d.weather || d.type || '-'}</div>
+          <div class="text-sm opacity-80 mt-1">${d.direct || d.windDirection || ''} ${d.power || d.windPower || ''}</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-gray-50 rounded-xl p-4">
+            <div class="text-sm text-gray-500">湿度</div>
+            <div class="text-xl font-bold text-gray-700 mt-1">${d.humidity || '-'}</div>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-4">
+            <div class="text-sm text-gray-500">空气质量</div>
+            <div class="text-xl font-bold text-gray-700 mt-1">${d.aqi || d.airQuality || '-'}</div>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-4">
+            <div class="text-sm text-gray-500">体感温度</div>
+            <div class="text-xl font-bold text-gray-700 mt-1">${d.feelst || d.feelsLike || '-'}</div>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-4">
+            <div class="text-sm text-gray-500">紫外线</div>
+            <div class="text-xl font-bold text-gray-700 mt-1">${d.uvIndex || d.uv || '-'}</div>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      document.getElementById('weather-data').innerHTML = '<p class="text-gray-400 col-span-2 text-center py-8">加载失败，请检查城市名称</p>';
+    }
+  }
+
+  loadWeather('北京');
+  document.getElementById('cityBtn').addEventListener('click', () => {
+    const city = document.getElementById('cityInput').value.trim();
+    if (city) loadWeather(city);
+  });
+  document.getElementById('cityInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      const city = e.target.value.trim();
+      if (city) loadWeather(city);
+    }
+  });
+}
+
+async function renderMovie() {
+  content.innerHTML = `
+    <div class="fade-in">
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🎬</span>
+          <h3 class="font-bold text-lg">猫眼实时票房</h3>
+        </div>
+        <div id="maoyan-data" class="space-y-3">
+          ${skeletonCard(5)}
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const data = await fetchJSON('/v2/maoyan/realtime/movie');
+    const list = data.data?.list || data.data || [];
+    document.getElementById('maoyan-data').innerHTML = list.slice(0, 10).map((item, i) => `
+      <div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+        <span class="flex-shrink-0 w-8 h-8 rounded-lg ${i < 3 ? 'bg-gradient-to-br from-red-400 to-orange-400 text-white' : 'bg-gray-100 text-gray-500'} flex items-center justify-center font-bold text-sm">${i + 1}</span>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-gray-800 truncate">${item.name || item.movieName || '-'}</div>
+          <div class="text-sm text-gray-400">${item.releaseInfo || item.movieDesc || ''}</div>
+        </div>
+        <div class="text-right flex-shrink-0">
+          <div class="font-bold text-orange-500">${item.boxRate || item.boxRateDesc || item.boxOffice || '-'}</div>
+          <div class="text-xs text-gray-400">${item.seatRate || item.showCount || ''}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('maoyan-data').innerHTML = '<p class="text-gray-400 text-center py-8">加载失败</p>';
+  }
+}
+
+async function renderTools() {
+  content.innerHTML = `
+    <div class="fade-in grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">📱</span>
+          <h3 class="font-bold text-lg">二维码生成</h3>
+        </div>
+        <div class="flex gap-2 mb-4">
+          <input id="qrText" type="text" placeholder="输入文字或链接" class="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-400" value="https://github.com/islon/comef60s">
+          <button id="qrBtn" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-xl text-sm hover:opacity-90 transition">生成</button>
+        </div>
+        <div id="qrResult" class="flex justify-center py-4 bg-gray-50 rounded-xl">
+          <img src="${API_BASE}/v2/qrcode?text=https://github.com/islon/comef60s" alt="QR Code" class="w-40 h-40">
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🌐</span>
+          <h3 class="font-bold text-lg">翻译</h3>
+        </div>
+        <div class="space-y-3">
+          <textarea id="fanyiInput" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none" rows="3" placeholder="输入要翻译的文字...">Hello World</textarea>
+          <button id="fanyiBtn" class="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-xl text-sm hover:opacity-90 transition">翻译</button>
+          <div id="fanyiResult" class="p-3 bg-gray-50 rounded-xl min-h-[60px] text-gray-600 text-sm">点击翻译按钮查看结果</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🔗</span>
+          <h3 class="font-bold text-lg">IP 地址查询</h3>
+        </div>
+        <div id="ip-data">${skeletonCard(3)}</div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🔐</span>
+          <h3 class="font-bold text-lg">随机密码生成</h3>
+        </div>
+        <div class="flex gap-2 mb-3">
+          <button id="pwdBtn" class="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-xl text-sm hover:opacity-90 transition">生成密码</button>
+        </div>
+        <div id="pwdResult" class="p-3 bg-gray-50 rounded-xl font-mono text-center text-lg text-purple-600">点击生成</div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('qrBtn').addEventListener('click', () => {
+    const text = document.getElementById('qrText').value.trim();
+    if (text) {
+      document.getElementById('qrResult').innerHTML = `<img src="${API_BASE}/v2/qrcode?text=${encodeURIComponent(text)}" alt="QR Code" class="w-40 h-40">`;
+    }
+  });
+
+  document.getElementById('fanyiBtn').addEventListener('click', async () => {
+    const text = document.getElementById('fanyiInput').value.trim();
+    if (!text) return;
+    document.getElementById('fanyiResult').textContent = '翻译中...';
+    try {
+      const data = await fetchJSON('/v2/fanyi?text=' + encodeURIComponent(text));
+      document.getElementById('fanyiResult').textContent = data.data?.result || data.data || JSON.stringify(data);
+    } catch (e) {
+      document.getElementById('fanyiResult').textContent = '翻译失败';
+    }
+  });
+
+  try {
+    const data = await fetchJSON('/v2/ip');
+    const d = data.data;
+    document.getElementById('ip-data').innerHTML = `
+      <div class="space-y-2">
+        <div class="flex justify-between py-2 border-b border-gray-50">
+          <span class="text-gray-500 text-sm">IP 地址</span>
+          <span class="font-medium text-gray-700">${d.ip || '-'}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b border-gray-50">
+          <span class="text-gray-500 text-sm">所在地区</span>
+          <span class="font-medium text-gray-700">${d.country || ''} ${d.region || ''} ${d.city || ''}</span>
+        </div>
+        <div class="flex justify-between py-2">
+          <span class="text-gray-500 text-sm">运营商</span>
+          <span class="font-medium text-gray-700">${d.isp || d.org || '-'}</span>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    document.getElementById('ip-data').innerHTML = '<p class="text-gray-400 text-sm text-center py-4">加载失败</p>';
+  }
+
+  document.getElementById('pwdBtn').addEventListener('click', async () => {
+    try {
+      const data = await fetchJSON('/v2/password?length=16');
+      document.getElementById('pwdResult').textContent = data.data?.password || data.data || '生成失败';
+    } catch (e) {
+      document.getElementById('pwdResult').textContent = '生成失败';
+    }
+  });
+}
+
+async function renderLife() {
+  content.innerHTML = `
+    <div class="fade-in grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🍗</span>
+          <h3 class="font-bold text-lg">KFC 疯狂星期四</h3>
+        </div>
+        <div id="kfc-data" class="text-gray-600 text-sm">${skeletonCard(2)}</div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🎮</span>
+          <h3 class="font-bold text-lg">Epic 免费游戏</h3>
+        </div>
+        <div id="epic-data" class="text-gray-600 text-sm">${skeletonCard(2)}</div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">📅</span>
+          <h3 class="font-bold text-lg">历史上的今天</h3>
+        </div>
+        <div id="history-data" class="text-gray-600 text-sm">${skeletonCard(3)}</div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🎋</span>
+          <h3 class="font-bold text-lg">农历</h3>
+        </div>
+        <div id="lunar-data">${skeletonCard(3)}</div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">💬</span>
+          <h3 class="font-bold text-lg">一言</h3>
+        </div>
+        <div id="hitokoto-data" class="text-gray-600 italic">${skeletonCard(2)}</div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">😆</span>
+          <h3 class="font-bold text-lg">段子</h3>
+        </div>
+        <div id="duanzi-data" class="text-gray-600 text-sm">${skeletonCard(2)}</div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const data = await fetchJSON('/v2/kfc');
+    document.getElementById('kfc-data').innerHTML = `<p class="text-sm leading-relaxed">${data.data?.text || data.data || '暂无数据'}</p>`;
+  } catch (e) {
+    document.getElementById('kfc-data').innerHTML = '<p class="text-gray-400">加载失败</p>';
+  }
+
+  try {
+    const data = await fetchJSON('/v2/epic');
+    const list = data.data?.list || data.data || [];
+    document.getElementById('epic-data').innerHTML = Array.isArray(list) && list.length > 0 ? list.slice(0, 2).map(item => `
+      <div class="py-2 border-b border-gray-50 last:border-0">
+        <div class="font-medium text-gray-700 text-sm">${item.title || item.name || '-'}</div>
+        <div class="text-xs text-gray-400 mt-1">${item.startDate || ''} - ${item.endDate || ''}</div>
+      </div>
+    `).join('') : '<p class="text-gray-400">暂无数据</p>';
+  } catch (e) {
+    document.getElementById('epic-data').innerHTML = '<p class="text-gray-400">加载失败</p>';
+  }
+
+  try {
+    const data = await fetchJSON('/v2/today-in-history');
+    const list = data.data?.list || data.data || [];
+    document.getElementById('history-data').innerHTML = Array.isArray(list) && list.length > 0 ? list.slice(0, 5).map(item => `
+      <div class="py-1.5 border-b border-gray-50 last:border-0 text-sm">
+        <span class="text-purple-500 font-medium">${item.year || ''}</span>
+        <span class="text-gray-600"> - ${item.title || item.event || ''}</span>
+      </div>
+    `).join('') : '<p class="text-gray-400">暂无数据</p>';
+  } catch (e) {
+    document.getElementById('history-data').innerHTML = '<p class="text-gray-400">加载失败</p>';
+  }
+
+  try {
+    const data = await fetchJSON('/v2/lunar');
+    const d = data.data;
+    document.getElementById('lunar-data').innerHTML = `
+      <div class="space-y-2">
+        <div class="flex justify-between py-1.5 border-b border-gray-50">
+          <span class="text-gray-500 text-sm">农历</span>
+          <span class="font-medium text-gray-700 text-sm">${d.lunarYear || ''}年 ${d.lunarMonth || ''}月${d.lunarDay || ''}</span>
+        </div>
+        <div class="flex justify-between py-1.5 border-b border-gray-50">
+          <span class="text-gray-500 text-sm">生肖</span>
+          <span class="font-medium text-gray-700 text-sm">${d.animal || '-'}</span>
+        </div>
+        <div class="flex justify-between py-1.5">
+          <span class="text-gray-500 text-sm">节气</span>
+          <span class="font-medium text-gray-700 text-sm">${d.jieqi || d.solarTerm || '无'}</span>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    document.getElementById('lunar-data').innerHTML = '<p class="text-gray-400">加载失败</p>';
+  }
+
+  try {
+    const data = await fetchJSON('/v2/hitokoto');
+    document.getElementById('hitokoto-data').innerHTML = `
+      <p class="leading-relaxed">${data.data?.content || data.data?.hitokoto || '暂无数据'}</p>
+      <p class="text-xs text-gray-400 mt-2 text-right">—— ${data.data?.from || data.data?.source || ''}</p>
+    `;
+  } catch (e) {
+    document.getElementById('hitokoto-data').innerHTML = '<p class="text-gray-400">加载失败</p>';
+  }
+
+  try {
+    const data = await fetchJSON('/v2/duanzi');
+    document.getElementById('duanzi-data').innerHTML = `<p class="leading-relaxed">${data.data?.content || data.data?.text || data.data || '暂无数据'}</p>`;
+  } catch (e) {
+    document.getElementById('duanzi-data').innerHTML = '<p class="text-gray-400">加载失败</p>';
+  }
+}
+
+async function loadTab(tab) {
+  content.innerHTML = '<div class="text-center py-16 text-gray-400">加载中...</div>';
+  switch (tab) {
+    case '60s':
+      try {
+        const data = await fetchJSON('/v2/60s');
+        content.innerHTML = render60s(data);
+      } catch (e) {
+        content.innerHTML = '<div class="bg-white rounded-2xl p-8 text-center text-gray-400">加载失败，请稍后重试</div>';
+      }
+      break;
+    case 'hot':
+      renderHot();
+      break;
+    case 'finance':
+      renderFinance();
+      break;
+    case 'weather':
+      renderWeather();
+      break;
+    case 'movie':
+      renderMovie();
+      break;
+    case 'tools':
+      renderTools();
+      break;
+    case 'life':
+      renderLife();
+      break;
+  }
+}
+
+loadTab('60s');
+</script>
+
+</body>
+</html>
