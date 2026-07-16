@@ -49,6 +49,7 @@
       <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="finance">💰 财经数据</button>
       <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="weather">🌤️ 天气</button>
       <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="movie">🎬 影视</button>
+      <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="duanzi">😆 段子</button>
       <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="tools">🛠️ 工具</button>
       <button class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-gray-100" data-tab="life">🎯 生活娱乐</button>
     </div>
@@ -66,9 +67,11 @@
 
 <script>
 const API_BASE = 'https://60s.viki.moe';
+const CACHE_TTL = 5 * 60 * 1000;
 
 const tabs = document.querySelectorAll('.tab-btn');
 const content = document.getElementById('content');
+const cache = {};
 
 function setCurrentDate() {
   const now = new Date();
@@ -87,8 +90,15 @@ tabs.forEach(tab => {
 });
 
 async function fetchJSON(url) {
+  const cacheKey = url;
+  const now = Date.now();
+  if (cache[cacheKey] && (now - cache[cacheKey].time < CACHE_TTL)) {
+    return cache[cacheKey].data;
+  }
   const res = await fetch(API_BASE + url);
-  return res.json();
+  const data = await res.json();
+  cache[cacheKey] = { data, time: now };
+  return data;
 }
 
 function skeletonCard(count = 5) {
@@ -373,6 +383,39 @@ async function renderMovie() {
   }
 }
 
+async function renderDuanzi() {
+  content.innerHTML = `
+    <div class="fade-in">
+      <div class="bg-white rounded-2xl shadow-sm p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">😆</span>
+          <h3 class="font-bold text-lg">今日段子</h3>
+          <button id="duanziRefresh" class="ml-auto px-4 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg text-sm hover:opacity-90 transition">换一个</button>
+        </div>
+        <div id="duanzi-data" class="text-gray-700 text-lg leading-relaxed p-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl min-h-[200px] flex items-center justify-center">
+          <span class="text-gray-400">加载中...</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  async function loadDuanzi() {
+    const container = document.getElementById('duanzi-data');
+    container.innerHTML = '<span class="text-gray-400">加载中...</span>';
+    try {
+      delete cache['/v2/duanzi'];
+      const data = await fetchJSON('/v2/duanzi');
+      const text = data.data?.content || data.data?.text || data.data || '暂无数据';
+      container.innerHTML = `<p>${text}</p>`;
+    } catch (e) {
+      container.innerHTML = '<span class="text-gray-400">加载失败</span>';
+    }
+  }
+
+  loadDuanzi();
+  document.getElementById('duanziRefresh').addEventListener('click', loadDuanzi);
+}
+
 async function renderTools() {
   content.innerHTML = `
     <div class="fade-in grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -467,6 +510,7 @@ async function renderTools() {
 
   document.getElementById('pwdBtn').addEventListener('click', async () => {
     try {
+      delete cache['/v2/password?length=16'];
       const data = await fetchJSON('/v2/password?length=16');
       document.getElementById('pwdResult').textContent = data.data?.password || data.data || '生成失败';
     } catch (e) {
@@ -520,10 +564,10 @@ async function renderLife() {
 
       <div class="bg-white rounded-2xl shadow-sm p-6 card-hover">
         <div class="flex items-center gap-2 mb-4">
-          <span class="text-2xl">😆</span>
-          <h3 class="font-bold text-lg">段子</h3>
+          <span class="text-2xl">🎵</span>
+          <h3 class="font-bold text-lg">网易云热歌榜</h3>
         </div>
-        <div id="duanzi-data" class="text-gray-600 text-sm">${skeletonCard(2)}</div>
+        <div id="ncm-data" class="text-gray-600 text-sm">${skeletonCard(3)}</div>
       </div>
     </div>
   `;
@@ -595,42 +639,77 @@ async function renderLife() {
   }
 
   try {
-    const data = await fetchJSON('/v2/duanzi');
-    document.getElementById('duanzi-data').innerHTML = `<p class="leading-relaxed">${data.data?.content || data.data?.text || data.data || '暂无数据'}</p>`;
+    const data = await fetchJSON('/v2/ncm-rank/list');
+    const d = data.data;
+    const list = d?.list || d?.songs || [];
+    document.getElementById('ncm-data').innerHTML = Array.isArray(list) && list.length > 0 ? list.slice(0, 5).map((item, i) => `
+      <div class="py-1.5 border-b border-gray-50 last:border-0 text-sm truncate">
+        <span class="text-purple-500 font-medium mr-2">${i + 1}</span>
+        <span class="text-gray-700">${item.name || item.title || '-'}</span>
+      </div>
+    `).join('') : '<p class="text-gray-400">暂无数据</p>';
   } catch (e) {
-    document.getElementById('duanzi-data').innerHTML = '<p class="text-gray-400">加载失败</p>';
+    document.getElementById('ncm-data').innerHTML = '<p class="text-gray-400">加载失败</p>';
   }
 }
 
+const loadedTabs = {};
+
 async function loadTab(tab) {
+  if (loadedTabs[tab]) {
+    content.innerHTML = loadedTabs[tab];
+    rebindEvents(tab);
+    return;
+  }
+
   content.innerHTML = '<div class="text-center py-16 text-gray-400">加载中...</div>';
+
+  const originalHTML = content.innerHTML;
   switch (tab) {
     case '60s':
       try {
         const data = await fetchJSON('/v2/60s');
         content.innerHTML = render60s(data);
+        loadedTabs[tab] = content.innerHTML;
       } catch (e) {
         content.innerHTML = '<div class="bg-white rounded-2xl p-8 text-center text-gray-400">加载失败，请稍后重试</div>';
       }
       break;
     case 'hot':
-      renderHot();
+      await renderHot();
+      setTimeout(() => { loadedTabs[tab] = content.innerHTML; }, 3000);
       break;
     case 'finance':
-      renderFinance();
+      await renderFinance();
+      setTimeout(() => { loadedTabs[tab] = content.innerHTML; }, 3000);
       break;
     case 'weather':
       renderWeather();
       break;
     case 'movie':
-      renderMovie();
+      await renderMovie();
+      loadedTabs[tab] = content.innerHTML;
+      break;
+    case 'duanzi':
+      renderDuanzi();
       break;
     case 'tools':
       renderTools();
       break;
     case 'life':
-      renderLife();
+      await renderLife();
+      setTimeout(() => { loadedTabs[tab] = content.innerHTML; }, 5000);
       break;
+  }
+}
+
+function rebindEvents(tab) {
+  if (tab === 'weather') {
+    renderWeather();
+  } else if (tab === 'duanzi') {
+    renderDuanzi();
+  } else if (tab === 'tools') {
+    renderTools();
   }
 }
 
